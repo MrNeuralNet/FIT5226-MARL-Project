@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Workflow
+
+Commit and push to GitHub regularly as work progresses — after each meaningful change, completed task, or working milestone. Never let significant work sit uncommitted. Use clear, descriptive commit messages that capture what changed and why.
+
+```
+git add <files>
+git commit -m "descriptive message"
+git push
+```
+
 ## Project Context
 
 FIT5226 university project implementing Q-learning agents in a grid world. Stage 1 (complete) is a single-agent solution. Stage 2 (in progress) extends this to multi-agent coordination. The assignment spec PDFs are in the repo root.
