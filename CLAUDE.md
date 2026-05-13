@@ -14,7 +14,7 @@ git push
 
 ## Project Context
 
-FIT5226 university project implementing Q-learning agents in a grid world. Stage 1 (complete) is a single-agent solution. Stage 2 (in progress) extends this to multi-agent coordination. The assignment spec PDFs are in the repo root.
+FIT5226 university project implementing Q-learning agents in a grid world. Stage 1 (complete) is a single-agent solution. Stage 2 (complete) is a multi-agent coordination solution covering all four assignment tasks (Pass through HD level). Assignment spec PDFs are in the repo root. Deadline: May 15, 2026.
 
 ## Running the Code
 
@@ -25,7 +25,9 @@ jupyter notebook
 Or run a notebook non-interactively:
 ```
 jupyter nbconvert --to notebook --execute "Stage 1 Solution.ipynb"
+jupyter nbconvert --to notebook --execute "Stage 2 Solution.ipynb" --ExecutePreprocessor.timeout=600
 ```
+Stage 2 takes ~5 minutes to execute (100k + 100k + 5×50k + 4×50k training episodes).
 
 ## Architecture
 
@@ -43,15 +45,48 @@ Two classes work together:
 - Standard ε-greedy selection and Q-learning (off-policy TD) update
 - Trained Q-table saved to `qTable single agent fast.dat`
 
-### Stage 2 (to be built)
+### Stage 2 (`Stage 2 Solution.ipynb`)
 
-Extends Stage 1 with:
-- **Two agent types** (A and B) with separate Q-tables
-- **Fixed locations**: X (west), Y (north), U (east), V (south), lake at the intersection of shortest paths
-- **5 actions**: NSEW + wait
-- **Lake state**: binary dry/flooded, flips probabilistically after each step
-- **State per agent**: `(row, col, carrying_sample, lake_state)`
-- **Simultaneous stepping**: all agents act at the same time; collisions detected post-move
-- **Rewards**: step=-5, wait=-3, collision=-20, Type A entering flooded lake=-20, sample pickup=+10, delivery=+50
+#### Grid layout
+```
+     col0  col1  col2  col3  col4
+row0  [  ]  [  ]  [ Y]  [  ]  [  ]
+row1  [  ]  [  ]  [  ]  [  ]  [  ]
+row2  [ X]  [  ]  [LK]  [  ]  [ U]
+row3  [  ]  [  ]  [  ]  [  ]  [  ]
+row4  [  ]  [  ]  [ V]  [  ]  [  ]
+```
+X=(2,0) A start/return, Y=(0,2) B start/return, U=(2,4) A sample, V=(4,2) B sample, LAKE=(2,2).
 
-Key implementation note from the spec: when updating Q-values, account for **both possible next lake states** (it could flood or dry at any point).
+#### Key classes
+
+**`MultiAgentEnvironment`** — owns all world state:
+- `lake_state` (0=dry, 1=flooded), flips with `LAKE_FLIP_PROB=0.3` each timestep (step 6 of spec sequence)
+- `step(action_a, action_b, phase)` — simultaneous execution; collision detected when both land on LAKE; Phase 1 only: A penalised -20 for entering/staying in flooded lake
+- `get_state_a/b()` returns `(row, col, carrying, lake_state)`
+
+**`QTableAgent2`** — one instance per agent type:
+- Q-table shape `(5, 5, 2, 2, 5)` = row × col × carrying × lake_state × action
+- `update()` uses expected-lake Q-update: averages future Q over both possible next lake states weighted by `LAKE_FLIP_PROB` (spec Hint 4)
+- Critical: snapshot `was_done = env.done` **before** `env.step()` to correctly update the terminal delivery step
+
+#### Training
+- `train(agent_a, agent_b, env, ..., phase=1|2)` — joint loop, 100k episodes, lr=0.3, γ=0.95, ε: 1.0→0.05
+- Phase 1: water damage penalty active for A; Phase 2: no water penalty
+- Saved artefacts: `qTable_A_phase1.dat`, `qTable_B_phase1.dat`, `qTable_A_phase2.dat`, `qTable_B_phase2.dat`
+
+#### Helper functions
+- `visualise_policy(agent, 'A'|'B')` — prints greedy action at approach cell and lake cell for all (carrying, lake_state) combinations
+- `trace_episode(agent_a, agent_b, env, phase)` — runs one greedy episode and prints step-by-step path
+- `plot_results(...)` — 2×2 subplot: reward curves, collision rate, success rate
+
+#### Task structure
+| Task | Content |
+|---|---|
+| Task 1 | Phase 1 training + plots + policy visualisation |
+| Task 2 | Phase 2 training + comparison + seed-sensitivity experiment + step-penalty sweep |
+| Task 3 | Hawk-Dove payoff matrices (V=10, C=40), `replicator_dynamics()`, phase portraits |
+| Task 4 | Theoretical explanation markdown (148 words, limit 150) |
+
+#### Known behaviour
+Phase 1 agents learn **path specialisation** (A detours via row 3, B crosses through lake) rather than the canonical traffic-light solution. This is valid — the water penalty drives the asymmetry as required by the spec — but is suboptimal for A. Phase 2 collision rate (~0.089) is ~2× Phase 1 (~0.047), demonstrating the harder coordination problem.
